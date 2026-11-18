@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
+import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 
 const registerSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(50),
@@ -233,6 +234,8 @@ export function RegisterForm() {
               'Create account'
             )}
           </Button>
+
+          <GoogleSignInButton mode="signup" />
 
           <p className="text-sm text-slate-400">
             Already have an account?{' '}

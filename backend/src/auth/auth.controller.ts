@@ -13,6 +13,7 @@ import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
@@ -22,6 +23,17 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Public()
+  @Get('google/config')
+  @ApiOperation({ summary: 'Whether Google sign-in is enabled (and the public client ID)' })
+  googleConfig() {
+    const enabled = this.authService.isGoogleAuthEnabled();
+    return {
+      enabled,
+      clientId: enabled ? this.authService.getGoogleClientId() : null,
+    };
+  }
 
   @Public()
   @Post('register')
@@ -40,6 +52,16 @@ export class AuthController {
     const ipAddress = req.ip || req.headers['x-forwarded-for'] as string;
     const userAgent = req.headers['user-agent'];
     return this.authService.login(dto, ipAddress, userAgent);
+  }
+
+  @Public()
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Sign in with a Google ID token (Google Identity Services)' })
+  async loginWithGoogle(@Body() dto: GoogleLoginDto, @Req() req: Request) {
+    const ipAddress = req.ip || (req.headers['x-forwarded-for'] as string);
+    const userAgent = req.headers['user-agent'];
+    return this.authService.loginWithGoogle(dto.idToken, ipAddress, userAgent);
   }
 
   @Public()

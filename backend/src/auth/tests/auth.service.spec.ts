@@ -175,5 +175,17 @@ describe('AuthService', () => {
         service.login({ email: 'test@example.com', password: 'SecurePass@123' }),
       ).rejects.toThrow(UnauthorizedException);
     });
+
+    it('should reject password login when the account has no password hash', async () => {
+      mockUsersService.findByEmail.mockResolvedValue({
+        ...mockUser,
+        passwordHash: null,
+        authProvider: 'GOOGLE',
+      });
+
+      await expect(
+        service.login({ email: 'test@example.com', password: 'SecurePass@123' }),
+      ).rejects.toThrow(/Google sign-in/i);
+    });
   });
 });
