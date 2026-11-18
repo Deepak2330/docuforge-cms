@@ -62,17 +62,22 @@ export class ApiSpecsService {
     });
   }
 
-  async findOne(id: string, userId: string) {
+  async findOne(id: string, userId?: string) {
+    const projectAccess = userId
+      ? {
+          OR: [
+            { isPublic: true },
+            { members: { some: { userId } } },
+            { workspace: { members: { some: { userId } } } },
+          ],
+        }
+      : { isPublic: true };
+
     const spec = await this.prisma.apiSpecification.findFirst({
       where: {
         id,
         isActive: true,
-        project: {
-          OR: [
-            { members: { some: { userId } } },
-            { workspace: { members: { some: { userId } } } },
-          ],
-        },
+        project: projectAccess,
       },
       include: {
         versions: { orderBy: { createdAt: 'desc' } },

@@ -11,7 +11,6 @@ import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
-import { v4 as uuidv4 } from 'uuid';
 
 export interface AuthTokens {
   accessToken: string;
@@ -102,8 +101,6 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
-
-    const tokenHash = await bcrypt.hash(refreshToken, 10);
 
     // Find valid token for this user
     const storedTokens = await this.prisma.refreshToken.findMany({

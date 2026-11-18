@@ -17,30 +17,13 @@ export function TopBar({ user }: TopBarProps) {
 
   const handleLogout = async () => {
     try {
-      // Call backend logout
-      const token = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('docuforge_access_token='))
-        ?.split('=')[1];
-
-      if (token) {
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
-      }
-
-      // Clear session cookies
+      // Server route reads httpOnly refresh cookie and revokes it on the backend
       await fetch('/api/auth/logout', { method: 'POST' });
 
       toast({ title: 'Signed out', description: 'You have been signed out successfully.' });
       router.push('/login');
       router.refresh();
     } catch {
-      // Even if backend fails, clear local session
       await fetch('/api/auth/logout', { method: 'POST' });
       router.push('/login');
     }

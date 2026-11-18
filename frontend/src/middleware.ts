@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_ROUTES = ['/login', '/register', '/forgot-password'];
+// Public portal is intentionally unauthenticated (README / product feature).
+const PUBLIC_ROUTES = ['/login', '/register', '/forgot-password', '/portal'];
 const AUTH_ROUTES = ['/login', '/register'];
 
 export function middleware(request: NextRequest) {
@@ -24,18 +25,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Re-set the access token as non-httpOnly so client JS can read it.
-  // This silently upgrades sessions that were set with httpOnly: true.
-  const response = NextResponse.next();
-  if (accessToken) {
-    response.cookies.set('docuforge_access_token', accessToken, {
-      httpOnly: false,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60, // 1 hour
-    });
-  }
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {

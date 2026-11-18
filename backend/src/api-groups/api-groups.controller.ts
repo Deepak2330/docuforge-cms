@@ -3,6 +3,7 @@ import { ApiGroupsService } from './api-groups.service';
 import { CreateApiGroupDto } from './dto/create-api-group.dto';
 import { UpdateApiGroupDto } from './dto/update-api-group.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 
 @Controller()
 export class ApiGroupsController {
@@ -22,8 +23,9 @@ export class ApiGroupsController {
     return this.apiGroupsService.findAllInProject(projectId, userId);
   }
 
+  @Public()
   @Get('api-groups')
-  findAll(@CurrentUser('id') userId: string) {
+  findAll(@CurrentUser('id') userId?: string) {
     return this.apiGroupsService.findAll(userId);
   }
 

@@ -3,6 +3,7 @@ import { ApiSpecsService } from './api-specs.service';
 import { CreateApiSpecDto } from './dto/create-api-spec.dto';
 import { UpdateApiSpecDto } from './dto/update-api-spec.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 
 @Controller()
 export class ApiSpecsController {
@@ -27,8 +28,9 @@ export class ApiSpecsController {
     return this.apiSpecsService.findAll(userId);
   }
 
+  @Public()
   @Get('api-specs/:id')
-  findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
+  findOne(@Param('id') id: string, @CurrentUser('id') userId?: string) {
     return this.apiSpecsService.findOne(id, userId);
   }
 
