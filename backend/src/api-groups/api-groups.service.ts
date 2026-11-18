@@ -52,17 +52,20 @@ export class ApiGroupsService {
     });
   }
 
-  async findAll(userId: string) {
-    return this.prisma.apiGroup.findMany({
-      where: {
-        project: {
+  async findAll(userId?: string) {
+    const projectFilter = userId
+      ? {
           isActive: true,
           OR: [
+            { isPublic: true },
             { members: { some: { userId } } },
             { workspace: { members: { some: { userId } } } },
           ],
-        },
-      },
+        }
+      : { isActive: true, isPublic: true };
+
+    return this.prisma.apiGroup.findMany({
+      where: { project: projectFilter },
       include: {
         ...GROUP_INCLUDE,
         project: { select: { id: true, name: true, slug: true } },

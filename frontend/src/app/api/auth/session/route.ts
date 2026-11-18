@@ -13,8 +13,10 @@ export async function POST(request: NextRequest) {
     const cookieStore = await cookies();
     const isProduction = process.env.NODE_ENV === 'production';
 
+    // Access token must be readable by client JS (dashboard getToken / TopBar).
+    // Refresh token stays httpOnly.
     cookieStore.set('docuforge_access_token', tokens.accessToken, {
-      httpOnly: true,
+      httpOnly: false,
       secure: isProduction,
       sameSite: 'lax',
       maxAge: tokens.expiresIn,
