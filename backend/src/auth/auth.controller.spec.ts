@@ -8,6 +8,9 @@ describe('AuthController', () => {
   const mockAuthService = {
     register: jest.fn(),
     login: jest.fn(),
+    loginWithGoogle: jest.fn(),
+    isGoogleAuthEnabled: jest.fn().mockReturnValue(false),
+    getGoogleClientId: jest.fn().mockReturnValue(null),
     logout: jest.fn(),
   };
 
@@ -38,5 +41,20 @@ describe('AuthController', () => {
     const req = { ip: '127.0.0.1', headers: {} } as any;
     await controller.login({ email: 'test@example.com', password: 'Pass@123!' }, req);
     expect(mockAuthService.login).toHaveBeenCalled();
+  });
+
+  it('should return google config when disabled', () => {
+    expect(controller.googleConfig()).toEqual({ enabled: false, clientId: null });
+  });
+
+  it('should call authService.loginWithGoogle on /google', async () => {
+    mockAuthService.loginWithGoogle.mockResolvedValue({ user: {}, tokens: { accessToken: 'token' } });
+    const req = { ip: '127.0.0.1', headers: {} } as any;
+    await controller.loginWithGoogle({ idToken: 'fake.google.id.token.value' }, req);
+    expect(mockAuthService.loginWithGoogle).toHaveBeenCalledWith(
+      'fake.google.id.token.value',
+      '127.0.0.1',
+      undefined,
+    );
   });
 });

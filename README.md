@@ -36,7 +36,7 @@ The following table describes the planned platform capabilities. See [Developmen
 | Media library | Manage files and images within projects. |
 | Categories | Organize documentation using nested categories. |
 | Public portals | Publish documentation for external users. |
-| Authentication | Secure application access using JWT access and refresh tokens. |
+| Authentication | Secure application access using JWT access and refresh tokens, with optional Google sign-in. |
 | Rate limiting | Apply request throttling across configured time windows. |
 
 ## Technology stack
@@ -50,7 +50,7 @@ DocuForge uses a separate frontend and backend, with PostgreSQL as the primary d
 | Backend | NestJS 10, TypeScript |
 | ORM | Prisma |
 | Database | PostgreSQL 15 |
-| Authentication | JWT, bcrypt |
+| Authentication | JWT, bcrypt, optional Google Identity Services |
 | File storage | Local filesystem, MinIO or AWS S3 |
 | Infrastructure | Docker, Docker Compose |
 
@@ -208,6 +208,7 @@ File: `backend/.env`
 | `JWT_REFRESH_EXPIRES_IN` | Refresh token expiration time | `7d` |
 | `PORT` | Backend server port | `3001` |
 | `FRONTEND_URL` | Allowed frontend origin for CORS | `http://localhost:3000` |
+| `GOOGLE_CLIENT_ID` | Google OAuth Web client ID (optional; enables Sign in with Google) | empty |
 
 ### Frontend environment
 
@@ -220,6 +221,24 @@ File: `frontend/.env.local`
 
 Do not commit environment files containing credentials or secrets. Use secure, unique JWT secrets in production.
 
+### Sign in with Google (optional)
+
+DocuForge uses **Google Identity Services** (ID token verification), not a full OAuth redirect dance. This fits the existing NestJS JWT + Next.js cookie session flow.
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an **OAuth 2.0 Client ID** of type **Web application**.
+2. Under **Authorized JavaScript origins**, add your frontend origin (for local: `http://localhost:3000`).
+3. Set `GOOGLE_CLIENT_ID` in `backend/.env` to that client ID (and in Docker Compose env if you use Compose).
+4. Restart the backend. The login and register pages call `GET /api/v1/auth/google/config` and show the Google button only when configured.
+5. On success, the frontend posts the Google ID token to `POST /api/v1/auth/google`, then stores DocuForge JWTs via `/api/auth/session` as with password login.
+
+Security notes:
+
+- The backend verifies the ID token with Google (`aud`, `iss`, signature) via `google-auth-library`.
+- Only accounts with `email_verified` are accepted.
+- New Google users are created as `VIEWER` (never elevated by OAuth).
+- Existing local users with the same verified email are linked by `googleId`.
+- If `GOOGLE_CLIENT_ID` is unset, Google sign-in is disabled and the button is hidden.
+
 ## API
 
 The backend exposes REST endpoints under `/api/v1`.
@@ -231,6 +250,8 @@ The following endpoints provide an overview of the available API surface.
 | `GET` | `/api/v1/health` | Check API health |
 | `POST` | `/api/v1/auth/register` | Register a user |
 | `POST` | `/api/v1/auth/login` | Authenticate a user |
+| `GET` | `/api/v1/auth/google/config` | Whether Google sign-in is enabled |
+| `POST` | `/api/v1/auth/google` | Authenticate with a Google ID token |
 | `POST` | `/api/v1/auth/refresh` | Refresh an access token |
 | `POST` | `/api/v1/auth/logout` | Log out a user |
 | `GET` | `/api/v1/auth/me` | Retrieve the authenticated user |
