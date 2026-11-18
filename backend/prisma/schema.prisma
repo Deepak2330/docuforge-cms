@@ -1,0 +1,448 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  REVIEWER
+  VIEWER
+}
+
+enum DocumentStatus {
+  DRAFT
+  IN_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum DocumentType {
+  USER_GUIDE
+  API_REFERENCE
+  TUTORIAL
+  TROUBLESHOOTING
+  RELEASE_NOTE
+  INSTALLATION_GUIDE
+  CONFIGURATION_GUIDE
+  CODE_SAMPLE
+  GENERAL
+}
+
+enum ReviewStatus {
+  PENDING
+  IN_PROGRESS
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  role         Role     @default(VIEWER)
+  isActive     Boolean  @default(true) @map("is_active")
+  avatarUrl    String?  @map("avatar_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  lastLoginAt  DateTime? @map("last_login_at")
+
+  refreshTokens    RefreshToken[]
+  workspaceMemberships WorkspaceMember[]
+  projectMemberships   ProjectMember[]
+  createdDocuments     Document[]        @relation("DocumentCreator")
+  ownedDocuments       Document[]        @relation("DocumentOwner")
+  reviews              Review[]
+  reviewComments       ReviewComment[]
+  auditLogs            AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  ipAddress String?   @map("ip_address")
+  userAgent String?   @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+model Workspace {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  logoUrl     String?  @map("logo_url")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  members  WorkspaceMember[]
+  projects Project[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String   @id @default(uuid())
+  workspaceId String   @map("workspace_id")
+  userId      String   @map("user_id")
+  role        Role     @default(VIEWER)
+  joinedAt    DateTime @default(now()) @map("joined_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model Project {
+  id           String   @id @default(uuid())
+  workspaceId  String   @map("workspace_id")
+  name         String
+  slug         String
+  description  String?
+  logoUrl      String?  @map("logo_url")
+  isPublic     Boolean  @default(false) @map("is_public")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members        ProjectMember[]
+  documents      Document[]
+  categories     Category[]
+  apiSpecs       ApiSpecification[]
+  apis           Api[]
+  apiGroups      ApiGroup[]
+  graphqlSchemas GraphqlSchema[]
+  releaseNotes   ReleaseNote[]
+  publications   Publication[]
+
+  @@unique([workspaceId, slug])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  role      Role     @default(VIEWER)
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  parentId    String?  @map("parent_id")
+  name        String
+  slug        String
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  documents Document[]
+
+  @@unique([projectId, slug])
+  @@map("categories")
+}
+
+model Document {
+  id          String         @id @default(uuid())
+  projectId   String         @map("project_id")
+  categoryId  String?        @map("category_id")
+  createdById String         @map("created_by_id")
+  ownerId     String         @map("owner_id")
+  title       String
+  slug        String
+  description String?
+  content     String?        @db.Text
+  status      DocumentStatus @default(DRAFT)
+  docType     DocumentType   @default(GENERAL) @map("doc_type")
+  tags        String[]       @default([])
+  sortOrder   Int            @default(0) @map("sort_order")
+  publishedAt DateTime?      @map("published_at")
+  archivedAt  DateTime?      @map("archived_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category   Category?         @relation(fields: [categoryId], references: [id])
+  createdBy  User              @relation("DocumentCreator", fields: [createdById], references: [id])
+  owner      User              @relation("DocumentOwner", fields: [ownerId], references: [id])
+  versions   DocumentVersion[]
+  reviews    Review[]
+  publication Publication?
+
+  @@unique([projectId, slug])
+  @@index([status])
+  @@index([projectId])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id          String   @id @default(uuid())
+  documentId  String   @map("document_id")
+  version     String
+  content     String?  @db.Text
+  changeNote  String?  @map("change_note")
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@map("document_versions")
+}
+
+model Review {
+  id           String       @id @default(uuid())
+  documentId   String       @map("document_id")
+  reviewerId   String       @map("reviewer_id")
+  status       ReviewStatus @default(PENDING)
+  feedback     String?
+  submittedAt  DateTime?    @map("submitted_at")
+  completedAt  DateTime?    @map("completed_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  document Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  reviewer User           @relation(fields: [reviewerId], references: [id])
+  comments ReviewComment[]
+
+  @@map("reviews")
+}
+
+model ReviewComment {
+  id         String   @id @default(uuid())
+  reviewId   String   @map("review_id")
+  authorId   String   @map("author_id")
+  content    String
+  isResolved Boolean  @default(false) @map("is_resolved")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id])
+
+  @@map("review_comments")
+}
+
+model Publication {
+  id           String   @id @default(uuid())
+  projectId    String   @map("project_id")
+  documentId   String?  @unique @map("document_id")
+  title        String
+  version      String
+  isPublic     Boolean  @default(false) @map("is_public")
+  publishedAt  DateTime @default(now()) @map("published_at")
+  contentSnapshot String? @map("content_snapshot") @db.Text
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id])
+
+  @@map("publications")
+}
+
+model ApiSpecification {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  title       String
+  description String?
+  version     String
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project  Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions ApiSpecificationVersion[]
+  apis     Api[]
+
+  @@map("api_specifications")
+}
+
+model Api {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  specId      String?  @map("spec_id")
+  name        String
+  slug        String
+  description String?
+  specType    String   @default("REST") @map("spec_type")
+  specVersion String?  @map("spec_version")
+  operations  Json?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  spec    ApiSpecification? @relation(fields: [specId], references: [id], onDelete: SetNull)
+  groups  ApiGroupApi[]
+
+  @@unique([projectId, slug])
+  @@map("apis")
+}
+
+model ApiGroup {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  parentId    String?  @map("parent_id")
+  name        String
+  slug        String
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project  Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   ApiGroup?  @relation("ApiGroupTree", fields: [parentId], references: [id])
+  children ApiGroup[] @relation("ApiGroupTree")
+  apis     ApiGroupApi[]
+
+  @@unique([projectId, slug])
+  @@map("api_groups")
+}
+
+model ApiGroupApi {
+  id      String @id @default(uuid())
+  groupId String @map("group_id")
+  apiId   String @map("api_id")
+
+  group ApiGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  api   Api      @relation(fields: [apiId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, apiId])
+  @@map("api_group_apis")
+}
+
+model ApiSpecificationVersion {
+  id              String   @id @default(uuid())
+  specId          String   @map("spec_id")
+  version         String
+  specContent     Json     @map("spec_content")
+  specFormat      String   @default("yaml") @map("spec_format")
+  isPublished     Boolean  @default(false) @map("is_published")
+  validationErrors Json?   @map("validation_errors")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  spec ApiSpecification @relation(fields: [specId], references: [id], onDelete: Cascade)
+
+  @@unique([specId, version])
+  @@map("api_specification_versions")
+}
+
+model GraphqlSchema {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  title       String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project  Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions GraphqlSchemaVersion[]
+
+  @@map("graphql_schemas")
+}
+
+model GraphqlSchemaVersion {
+  id           String   @id @default(uuid())
+  schemaId     String   @map("schema_id")
+  version      String
+  sdlContent   String   @map("sdl_content") @db.Text
+  parsedSchema Json?    @map("parsed_schema")
+  isPublished  Boolean  @default(false) @map("is_published")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  schema GraphqlSchema @relation(fields: [schemaId], references: [id], onDelete: Cascade)
+
+  @@unique([schemaId, version])
+  @@map("graphql_schema_versions")
+}
+
+model ReleaseNote {
+  id              String    @id @default(uuid())
+  projectId       String    @map("project_id")
+  title           String
+  version         String
+  releaseDate     DateTime  @map("release_date")
+  features        String[]  @default([])
+  improvements    String[]  @default([])
+  bugFixes        String[]  @default([])
+  breakingChanges String[]  @default([]) @map("breaking_changes")
+  content         String?   @db.Text
+  isPublished     Boolean   @default(false) @map("is_published")
+  publishedAt     DateTime? @map("published_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("release_notes")
+}
+
+model MediaAsset {
+  id           String   @id @default(uuid())
+  filename     String
+  originalName String   @map("original_name")
+  mimeType     String   @map("mime_type")
+  size         Int
+  url          String
+  storageKey   String   @map("storage_key")
+  projectId    String?  @map("project_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([projectId])
+  @@map("media_assets")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  action     String
+  resource   String
+  resourceId String?  @map("resource_id")
+  details    Json?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
